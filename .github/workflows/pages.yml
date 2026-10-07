@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -21,116 +21,42 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out project
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Recover verified large project assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! -f dist/panel.png || ! -f src/app/main.js ]]; then
-            mkdir -p dist src/app
-            curl --fail --location --retry 3 --retry-delay 2               "https://sabronpro-kit-studio.eng-mahmoudshreef.chatgpt.site/"               --output /tmp/sabronpro-existing-demo.html
-
-            if [[ ! -f dist/panel.png ]]; then
-              curl --fail --location --retry 3 --retry-delay 2                 "https://sabronpro-kit-studio.eng-mahmoudshreef.chatgpt.site/panel.png"                 --output dist/panel.png
-            fi
-
-            python - <<'PY'
-          import hashlib, pathlib
-          panel=pathlib.Path("dist/panel.png")
-          expected_panel="f1d919fcafa1ad3207a96a6f8737510ea7a4295607bf4f05d4677f0c3641de97"
-          actual_panel=hashlib.sha256(panel.read_bytes()).hexdigest()
-          if actual_panel!=expected_panel:
-              raise SystemExit(f"panel.png hash mismatch: {actual_panel}")
-
-          main=pathlib.Path("src/app/main.js")
-          if not main.exists():
-              demo=pathlib.Path("/tmp/sabronpro-existing-demo.html").read_text(encoding="utf-8",errors="ignore")
-              marker="\n// app/main.js\n"
-              start=demo.find(marker); end=demo.find("\n})();</script>",start)
-              if start<0 or end<0:
-                  raise SystemExit("Bundled app/main.js not found")
-              bundled=demo[start+len(marker):end].lstrip("\n")
-              imports="""import {AUTHOR,signatureSvg} from '../credits/credits.js';
-          import {ethernetSvg} from '../wiring/ethernet.js';
-          import {KIT,sockets,controls,obstacles,defaultStates,calibratedKit} from '../kit/kit-definition.js';
-          import {experiments} from '../experiments/experiments.js';
-          import {routeWire} from '../routing/router.js';
-          import {defs,wireSvg,controlSvg,tableSvg,escapeHtml} from '../wiring/render.js';
-          import {simulate,validate} from '../simulation/engine.js';
-          import {clone,loadRecovery,persist,saveNamed,listProjects,validateImport,download} from '../storage/projects.js';
-          import {exportDiagram} from '../export/exporter.js';
-          """
-              source=imports+bundled
-              expected_main="a680f2067e69391f074b8ba3631f821666cddb77e479080290c39cef3f48adee"
-              actual_main=hashlib.sha256(source.encode()).hexdigest()
-              if actual_main!=expected_main:
-                  raise SystemExit(f"main.js hash mismatch: {actual_main}")
-              main.write_text(source,encoding="utf-8")
-          PY
-          fi
-
-      - name: Build
+      - name: Build dependency-free application
         run: node build.mjs
 
-      - name: Generate repository screenshots when missing
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! -f docs/screenshots/credits.png || ! -f docs/screenshots/p01-ethernet-export.webp ]]; then
-            npm install --no-save --package-lock=false playwright@1.55.0 sharp@0.34.3
-            npx playwright install chromium
-            python3 -m http.server 4173 --directory dist >/tmp/sabronpro-http.log 2>&1 &
-            SERVER_PID=$!
-            trap 'kill $SERVER_PID || true' EXIT
-            sleep 2
-            node .github/scripts/capture-screenshots.mjs
-          fi
-
-      - name: Verify expected generated files
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(sha256sum dist/panel.png | awk '{print $1}')" = "f1d919fcafa1ad3207a96a6f8737510ea7a4295607bf4f05d4677f0c3641de97"
-          test "$(sha256sum src/app/main.js | awk '{print $1}')" = "a680f2067e69391f074b8ba3631f821666cddb77e479080290c39cef3f48adee"
-          test "$(sha256sum dist/index.html | awk '{print $1}')" = "d4ca478472453abcbb7e9cf35afd02ad8439df55070c33fca3eb523de7575cbe"
-          test "$(sha256sum SabronPro-Wiring-Studio.html | awk '{print $1}')" = "093820f6d75c168cdaeda06338af0cd5460cb07193681c2aa62dd472395704cb"
-          test -s docs/screenshots/credits.png
-          test -s docs/screenshots/p01-ethernet-export.webp
-
-      - name: Commit recovered/generated project files
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add src/app/main.js src/kit/kit-definition.js dist/panel.png dist/index.html SabronPro-Wiring-Studio.html docs/screenshots/credits.png docs/screenshots/p01-ethernet-export.webp
-          if ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Add verified distribution assets and screenshots"
-            git push origin HEAD:main
-          fi
-
-      - name: Enable Pages for Actions
+      - name: Check whether Pages is enabled
+        id: pages
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          status="$(curl -sS -o /tmp/pages.json -w '%{http_code}'             -H "Authorization: Bearer ${GH_TOKEN}"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages")"
-          if [[ "$status" == "404" ]]; then
-            curl --fail-with-body -sS -X POST               -H "Authorization: Bearer ${GH_TOKEN}"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages"               -d '{"build_type":"workflow"}' >/dev/null
+          status="$(curl -sS -o /tmp/pages.json -w '%{http_code}'             -H "Authorization: Bearer ${GH_TOKEN}"             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages")"
+          if [[ "$status" == "200" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages is not enabled yet. In Settings → Pages set Source to GitHub Actions, then rerun this workflow."
           fi
 
-      - uses: actions/configure-pages@v5
+      - name: Configure Pages
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/configure-pages@v5
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Upload static demo
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
       - name: Publish
+        if: steps.pages.outputs.enabled == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
