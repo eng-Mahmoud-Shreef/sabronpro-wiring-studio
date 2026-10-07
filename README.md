@@ -6,7 +6,7 @@
 
 **Made with love ♥ by Eng. Mahmoud Shreef**
 
-[**Open the GitHub Pages demo**](https://eng-mahmoud-shreef.github.io/sabronpro-wiring-studio/) · [**Existing public demo**](https://sabronpro-kit-studio.eng-mahmoudshreef.chatgpt.site) · [**Download the standalone HTML**](SabronPro-Wiring-Studio.html) · [**Documentation**](#documentation)
+[**Open the public demo**](https://sabronpro-kit-studio.eng-mahmoudshreef.chatgpt.site) · [**Download the standalone HTML**](SabronPro-Wiring-Studio.html) · [**Documentation**](#documentation)
 
 **v1.1.0** · **Works offline** · **No backend** · **Proprietary / All rights reserved**
 
@@ -58,9 +58,8 @@ Actual application screenshot:
 
 ### Use the online demo
 
-Open **[SabronPro Wiring Studio on GitHub Pages](https://eng-mahmoud-shreef.github.io/sabronpro-wiring-studio/)** in your browser. The demo is public. No project account or app installation is required. Your project data is stored locally in your browser rather than shared with other visitors.
+Open **[SabronPro Wiring Studio](https://sabronpro-kit-studio.eng-mahmoudshreef.chatgpt.site)** in your browser. The demo is public. No project account or app installation is required. Your project data is stored locally in your browser rather than shared with other visitors.
 
-The original public demo remains available at **https://sabronpro-kit-studio.eng-mahmoudshreef.chatgpt.site**.
 
 ### Use it offline — one file only
 
